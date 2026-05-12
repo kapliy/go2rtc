@@ -2,6 +2,7 @@ package tapo
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mpegts"
@@ -10,15 +11,33 @@ import (
 func (c *Client) GetMedias() []*core.Media {
 	if c.medias == nil {
 		// C460 (and likely other 4K-capable battery Tapos) emit H265.
-		// Advertise both; GetTrack maps codec → MPEG-TS stream type.
+		// Advertise both; #video=h264 / #video=h265 fragment narrows the list.
+		videoCodecs := []*core.Codec{
+			{Name: core.CodecH264, ClockRate: 90000, PayloadType: core.PayloadTypeRAW},
+			{Name: core.CodecH265, ClockRate: 90000, PayloadType: core.PayloadTypeRAW},
+		}
+		if c.url != nil && c.url.Fragment != "" {
+			for _, frag := range strings.Split(c.url.Fragment, "#") {
+				if !strings.HasPrefix(frag, "video=") {
+					continue
+				}
+				want := strings.TrimPrefix(frag, "video=")
+				var filtered []*core.Codec
+				for _, codec := range videoCodecs {
+					if strings.EqualFold(codec.Name, want) {
+						filtered = append(filtered, codec)
+					}
+				}
+				if len(filtered) > 0 {
+					videoCodecs = filtered
+				}
+			}
+		}
 		c.medias = []*core.Media{
 			{
 				Kind:      core.KindVideo,
 				Direction: core.DirectionRecvonly,
-				Codecs: []*core.Codec{
-					{Name: core.CodecH264, ClockRate: 90000, PayloadType: core.PayloadTypeRAW},
-					{Name: core.CodecH265, ClockRate: 90000, PayloadType: core.PayloadTypeRAW},
-				},
+				Codecs:    videoCodecs,
 			},
 			{
 				Kind:      core.KindAudio,
