@@ -9,13 +9,15 @@ import (
 
 func (c *Client) GetMedias() []*core.Media {
 	if c.medias == nil {
-		// don't know if all Tapo has this capabilities...
+		// C460 (and likely other 4K-capable battery Tapos) emit H265.
+		// Advertise both; GetTrack maps codec → MPEG-TS stream type.
 		c.medias = []*core.Media{
 			{
 				Kind:      core.KindVideo,
 				Direction: core.DirectionRecvonly,
 				Codecs: []*core.Codec{
 					{Name: core.CodecH264, ClockRate: 90000, PayloadType: core.PayloadTypeRAW},
+					{Name: core.CodecH265, ClockRate: 90000, PayloadType: core.PayloadTypeRAW},
 				},
 			},
 			{
@@ -52,7 +54,11 @@ func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver,
 	track := core.NewReceiver(media, codec)
 	switch media.Kind {
 	case core.KindVideo:
-		track.ID = mpegts.StreamTypeH264
+		if codec.Name == core.CodecH265 {
+			track.ID = mpegts.StreamTypeH265
+		} else {
+			track.ID = mpegts.StreamTypeH264
+		}
 	case core.KindAudio:
 		track.ID = mpegts.StreamTypePCMATapo
 	}
